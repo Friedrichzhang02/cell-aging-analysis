@@ -27,3 +27,6 @@ outputs/models/*
 
 # Logs
 *.log
+
+# Reference materials from collaborators
+reference/
