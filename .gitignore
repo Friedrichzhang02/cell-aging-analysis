@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Virtual environments
+.venv/
+venv/
+.env
+
+# Data files
+data/raw/*
+data/processed/*
+data/external/*
+!data/README.md
+
+# Outputs
+outputs/figures/*
+outputs/tables/*
+outputs/models/*
+!outputs/figures/.gitkeep
+!outputs/tables/.gitkeep
+!outputs/models/.gitkeep
+
+# System files
+.DS_Store
+
+# Logs
+*.log
