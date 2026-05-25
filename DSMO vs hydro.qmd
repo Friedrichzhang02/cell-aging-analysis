@@ -1,0 +1,128 @@
+---
+title: "DSMO vs hydro"
+format: html
+---
+
+```{r}
+if (!requireNamespace("vegan", quietly = TRUE)) {
+  install.packages("vegan")
+}
+
+library(vegan)
+
+set.seed(123)
+
+file_path <- "/home/rstudio/cell aging/df_clean_wide.csv"
+
+cell_df <- read.csv(file_path)
+
+mapping <- data.frame(
+  Metadata_JCP2022 = c(
+    "JCP2022_033924",
+    "JCP2022_095995",
+    "JCP2022_001418",
+    "JCP2022_094347",
+    "JCP2022_051785"
+  ),
+  drug_name = c(
+    "DMSO",
+    "hydroxyurea",
+    "palbociclib",
+    "etoposide",
+    "resveratrol"
+  ),
+  category = c(
+    "control",
+    "senescence_inducer",
+    "senescence_inducer",
+    "senescence_inducer",
+    "seno_modulator"
+  )
+)
+
+cell_df <- merge(cell_df, mapping, by = "Metadata_JCP2022", all.x = TRUE)
+
+cell_df <- cell_df[
+  cell_df$Cells_AreaShape_FormFactor <= 1 &
+    cell_df$Nuclei_AreaShape_FormFactor <= 1 &
+    cell_df$Cells_AreaShape_EulerNumber == 1 &
+    cell_df$Nuclei_AreaShape_EulerNumber == 1 &
+    cell_df$NC_Ratio <= 1 &
+    cell_df$NC_Ratio_Radius <= 1,
+]
+
+feature_cols <- c(
+  "Count_CellsIncludingEdges",
+  "Count_Cytoplasm",
+  "Count_Nuclei",
+  "Count_NucleiIncludingEdges",
+  "Cells_AreaShape_BoundingBoxArea",
+  "Cells_AreaShape_Compactness",
+  "Cells_AreaShape_Eccentricity",
+  "Cells_AreaShape_EulerNumber",
+  "Cells_AreaShape_FormFactor",
+  "Cells_AreaShape_MeanRadius",
+  "Cells_AreaShape_Perimeter",
+  "Cells_AreaShape_Solidity",
+  "Nuclei_AreaShape_BoundingBoxArea",
+  "Nuclei_AreaShape_Compactness",
+  "Nuclei_AreaShape_Eccentricity",
+  "Nuclei_AreaShape_EulerNumber",
+  "Nuclei_AreaShape_FormFactor",
+  "Nuclei_AreaShape_MeanRadius",
+  "Nuclei_AreaShape_Perimeter",
+  "Nuclei_AreaShape_Solidity",
+  "NC_Ratio",
+  "NC_Ratio_Radius"
+)
+
+df_pair <- cell_df[
+  cell_df$drug_name %in% c("DMSO", "hydroxyurea"),
+  c("drug_name", feature_cols)
+]
+
+df_pair <- df_pair[complete.cases(df_pair), ]
+
+cat("Counts before balancing:\n")
+print(table(df_pair$drug_name))
+
+idx_dmso <- which(df_pair$drug_name == "DMSO")
+idx_hydro <- which(df_pair$drug_name == "hydroxyurea")
+
+# Smaller sample so it finishes quickly
+n_bal <- min(length(idx_dmso), length(idx_hydro), 500)
+
+idx_use <- c(
+  sample(idx_dmso, n_bal),
+  sample(idx_hydro, n_bal)
+)
+
+df_bal <- df_pair[idx_use, ]
+
+cat("\nBalanced counts:\n")
+print(table(df_bal$drug_name))
+
+feature_sd <- sapply(df_bal[, feature_cols], sd, na.rm = TRUE)
+feature_cols_use <- feature_cols[feature_sd > 0]
+
+X_scaled <- scale(df_bal[, feature_cols_use])
+
+finite_rows <- apply(X_scaled, 1, function(z) all(is.finite(z)))
+
+X_scaled <- X_scaled[finite_rows, ]
+df_bal <- df_bal[finite_rows, ]
+
+cat("\nRunning PERMANOVA...\n")
+
+permanova_result <- adonis2(
+  X_scaled ~ drug_name,
+  data = df_bal,
+  method = "euclidean",
+  permutations = 199
+)
+
+cat("\nPERMANOVA result: DMSO vs hydroxyurea\n")
+print(permanova_result)
+```
+
+Conclusion: Since the PERMANOVA p-value is 0.005, the observed separation between DMSO and hydroxyurea morphology profiles is statistically significant under random label permutation. However, the R² is only 0.00494, meaning that the drug label explains only about 0.494% of the total multivariate morphology variation. Therefore, although the difference is statistically significant, in practice it is very small relative to the overall cell-to-cell variation. Most of the variation remains within groups rather than between DMSO and hydroxyurea. Long in short, DMSO and hydroxyurea are statistically different in morphology, but the difference is practically very small
